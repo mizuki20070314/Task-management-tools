@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Dashboard</title>
+
+<style>
+body {
+    margin: 0;
+    background: #f4f6f8;
+    font-family: -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", "Noto Sans JP", sans-serif;
+}
+header {
+    background: #667eea;
+    color: white;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+}
+main {
+    max-width: 900px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+.form-box, .task-list {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 10px;
+    box-shadow: 0 10px 25px rgba(0,0,0,.08);
+    margin-bottom: 2rem;
+}
+.form-box form {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: .8rem;
+}
+.form-box input,
+.form-box textarea,
+.form-box button {
+    padding: .6rem;
+    font-size: .95rem;
+}
+.form-box textarea {
+    grid-column: 1 / -1;
+}
+.form-box button {
+    grid-column: 1 / -1;
+    background: #667eea;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.task {
+    display: flex;
+    justify-content: space-between;
+    padding: .8rem 0;
+    border-bottom: 1px solid #eee;
+}
+.task:last-child { border-bottom: none; }
+.task.done .title,
+.task.done .meta,
+.task.done .detail {
+    text-decoration: line-through;
+    color: #777;
+}
+.task.overdue .title { color: #d33; }
+
+.actions a {
+    margin-left: .6rem;
+    text-decoration: none;
+    font-size: 1.1rem;
+}
+
+/* === Tasks header === */
+.tasks-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+.sort-box select {
+    padding: .4rem;
+}
+.actions a {
+    text-decoration: none;
+    font-size: 1.1rem;
+    color: #555; /* ここでアイコンの色を指定（例：濃いグレー） */
+}
+
+.actions a:hover {
+    color: #667eea; /* マウスを乗せた時の色（ヘッダーと同じ青など） */
+}
+/* ===== Mobile UI ===== */
+@media (max-width: 600px) {
+
+    header {
+        padding: 1rem;
+        flex-direction: column;
+        gap: .5rem;
+        text-align: center;
+    }
+
+    main {
+        margin: 1rem auto;
+        padding: 0 .8rem;
+    }
+
+    /* ---- Form ---- */
+    .form-box form {
+        grid-template-columns: 1fr;
+    }
+
+    .form-box input,
+    .form-box textarea,
+    .form-box button {
+        font-size: 1rem;
+    }
+
+    /* ---- Tasks header ---- */
+    .tasks-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: .5rem;
+    }
+
+    .sort-box {
+        width: 100%;
+    }
+
+    .sort-box select {
+        width: 100%;
+        font-size: 1rem;
+    }
+
+    /* ---- Task item ---- */
+    .task {
+        flex-direction: column;
+        gap: .6rem;
+        padding: 1rem 0;
+    }
+
+    .task .meta {
+        font-size: .85rem;
+        color: #777;
+    }
+
+    .task .detail {
+        font-size: .9rem;
+    }
+
+    /* ---- Action buttons ---- */
+    .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+    }
+
+    .actions a {
+        font-size: 1.3rem;
+    }
+}
+/* --- Chat Box UI --- */
+#chat-wrapper {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 300px;
+    z-index: 1000;
+}
+#chat-toggle {
+    background: #667eea;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    width: 100%;
+}
+#chat-box {
+    display: none; /* 初期は非表示 */
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+    margin-bottom: 10px;
+    flex-direction: column;
+    overflow: hidden;
+}
+#chat-messages {
+    height: 300px;
+    overflow-y: auto;
+    padding: 10px;
+    font-size: 0.9rem;
+    border-bottom: 1px solid #eee;
+}
+.msg { margin-bottom: 8px; }
+.msg-user { font-weight: bold; color: #667eea; font-size: 0.8rem; }
+.msg-text { background: #f0f2f5; padding: 5px 10px; border-radius: 5px; display: inline-block; }
+
+#chat-input-area { display: flex; padding: 5px; }
+#chat-input-area input { flex: 1; border: 1px solid #ddd; padding: 5px; border-radius: 4px; }
+</style>
+
+<script>
+let editing = false;
+let editIndex = null;
+let pendingSubmitForm = null;
+
+function editTask(index, name, date, time, detail) {
+    editing = true;
+    editIndex = index;
+
+    nameInput.value = name;
+    dateInput.value = date;
+    timeInput.value = time;
+    detailInput.value = detail;
+
+    submitBtn.textContent = 'Update Task';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function submitTask(form) {
+    if (!editing) return true;
+
+    pendingSubmitForm = form;
+
+    const iframe = document.getElementById('deleteFrame');
+    iframe.onload = onDeleteComplete;
+    iframe.src = '/delete/' + editIndex;
+
+    return false;
+}
+
+function onDeleteComplete() {
+    editing = false;
+    editIndex = null;
+    submitBtn.textContent = 'Add Task';
+
+    const form = pendingSubmitForm;
+    pendingSubmitForm = null;
+    deleteFrame.onload = null;
+
+    form.submit();
+}
+
+/* ===== 期限切れ判定 ===== */
+function updateOverdue() {
+    const now = new Date();
+
+    document.querySelectorAll('.task').forEach(task => {
+        const date = task.dataset.date;
+        const time = task.dataset.time;
+        const done = task.dataset.done === 'true';
+
+        const due = new Date(date + 'T' + time);
+
+        if (!done && due < now) {
+            task.classList.add('overdue');
+        } else {
+            task.classList.remove('overdue');
+        }
+    });
+}
+
+/* ===== ソート ===== */
+function sortTasks(type) {
+    const list = document.getElementById('taskContainer');
+    const tasks = Array.from(list.children);
+
+    tasks.sort((a, b) => {
+        const ad = new Date(a.dataset.date + 'T' + a.dataset.time);
+        const bd = new Date(b.dataset.date + 'T' + b.dataset.time);
+
+        if (type === 'date') return ad - bd;
+        if (type === 'date_desc') return bd - ad;
+        if (type === 'undone') return (a.dataset.done === 'true') - (b.dataset.done === 'true');
+        return 0;
+    });
+
+    tasks.forEach(t => list.appendChild(t));
+}
+
+function toggleChat() {
+    const box = document.getElementById('chat-box');
+    box.style.display = (box.style.display === 'flex') ? 'none' : 'flex';
+    if(box.style.display === 'flex') loadChat();
+}
+
+async function loadChat() {
+    const res = await fetch('/chat/get');
+    const data = await res.json();
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = data.messages.map(m => `
+        <div class="msg">
+            <div class="msg-user">${m.user} <span style="font-weight:normal; color:#999">${m.time}</span></div>
+            <div class="msg-text">${m.text}</div>
+        </div>
+    `).join('');
+    container.scrollTop = container.scrollHeight;
+}
+
+async function sendMsg() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.strip ? input.value.strip() : input.value;
+    if(!text) return;
+
+    const formData = new FormData();
+    formData.append('text', text);
+    
+    await fetch('/chat/send', { method: 'POST', body: formData });
+    input.value = '';
+    loadChat();
+}
+
+// 1秒ごとに更新
+setInterval(() => {
+    if(document.getElementById('chat-box').style.display === 'flex') {
+        loadChat();
+    }
+}, 1000);
+
+window.onload = () => {
+    updateOverdue();
+};
+</script>
+</head>
+<div id="chat-wrapper">
+    <div id="chat-box">
+        <div id="chat-messages"></div>
+        <div id="chat-input-area">
+            <input type="text" id="chatInput" placeholder="メッセージを入力...">
+            <button onclick="sendMsg()">送信</button>
+        </div>
+    </div>
+    <button id="chat-toggle" onclick="toggleChat()">💬 Chat</button>
+</div>
+<body>
+
+<header>
+    <div>{{ username }}'s Dashboard</div>
+    <a href="{{ url_for('logout') }}" style="color:white;">Logout</a>
+</header>
+
+<main>
+
+<h2>Add / Edit Task</h2>
+<div class="form-box">
+<form method="post"
+      action="{{ url_for('add_task') }}"
+      onsubmit="return submitTask(this)">
+
+    <input id="nameInput" name="name" placeholder="Task name" required>
+    <input id="dateInput" name="date" type="date" required>
+    <input id="timeInput" name="time" type="time" required>
+    <textarea id="detailInput" name="detail" placeholder="Detail"></textarea>
+
+    <button id="submitBtn">Add Task</button>
+</form>
+</div>
+
+<div class="task-list">
+
+<div class="tasks-header">
+    <h2>Tasks</h2>
+    <div class="sort-box">
+        <select onchange="sortTasks(this.value)">
+            <option value="">Sort</option>
+            <option value="date">期限が近い順</option>
+            <option value="date_desc">期限が遠い順</option>
+            <option value="undone">未完了優先</option>
+        </select>
+    </div>
+</div>
+
+<div id="taskContainer">
+{% for task in tasks %}
+<div class="task {% if task.done %}done{% endif %}"
+     data-date="{{ task.date }}"
+     data-time="{{ task.time }}"
+     data-done="{{ 'true' if task.done else 'false' }}">
+
+    <div>
+        <div class="title">{{ task.name }}</div>
+        <div class="meta">{{ task.date }} {{ task.time }}</div>
+        {% if task.detail %}
+        <div class="detail">{{ task.detail }}</div>
+        {% endif %}
+    </div>
+
+    <div class="actions">
+        <a href="{{ url_for('toggle_task', index=loop.index0) }}">
+            {% if task.done %}✔{% else %}▢{% endif %}
+        </a>
+        <a href="javascript:void(0)"
+           onclick="editTask(
+             {{ loop.index0 }},
+             '{{ task.name|e }}',
+             '{{ task.date }}',
+             '{{ task.time }}',
+             '{{ task.detail|e }}'
+           )">✎</a>
+        <a href="{{ url_for('delete_task', index=loop.index0) }}">🗑</a>
+    </div>
+</div>
+{% endfor %}
+</div>
+
+</div>
+
+</main>
+
+<iframe id="deleteFrame" style="display:none;"></iframe>
+
+</body>
+</html>
