@@ -176,8 +176,3 @@ http://localhost:5000
 - タスク期限通知
 - チャットのリアルタイム化 (WebSocket)
 
----
-
-# ライセンス
-
-MIT License
